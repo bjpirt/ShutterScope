@@ -1,5 +1,6 @@
 """CLI entry point for ShutterScope."""
 
+import argparse
 import sys
 
 from shutterscope.oscilloscope import RigolDS1000Z
@@ -11,10 +12,25 @@ DEFAULT_TRIGGER_LEVEL = 1.0
 
 def main() -> None:
     """Main entry point for ShutterScope CLI."""
-    print("Searching for Rigol DS1000Z oscilloscope...")
+    parser = argparse.ArgumentParser(
+        description="Capture waveform data from a Rigol DS1000Z oscilloscope"
+    )
+    parser.add_argument(
+        "address",
+        nargs="?",
+        help="VISA address (e.g., TCPIP::192.168.1.100::INSTR). "
+        "If not provided, auto-discovers via USB.",
+    )
+    args = parser.parse_args()
 
     try:
-        scope = RigolDS1000Z.auto_connect()
+        if args.address:
+            print(f"Connecting to {args.address}...")
+            scope = RigolDS1000Z(args.address)
+            scope.connect()
+        else:
+            print("Searching for Rigol DS1000Z oscilloscope...")
+            scope = RigolDS1000Z.auto_connect()
     except ConnectionError as e:
         print(f"Error: {e}")
         sys.exit(1)

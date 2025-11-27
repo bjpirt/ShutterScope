@@ -79,6 +79,10 @@ def test_analyzer(oscilloscope: OscilloscopeProtocol) -> None:
     # ...
 ```
 
+## Documentation
+
+When adding CLI arguments, new features, or changing how to run the application, update the README.md to reflect these changes.
+
 ## Quality Gates
 
 Before considering any task complete, all of the following must pass:

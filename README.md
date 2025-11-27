@@ -25,7 +25,14 @@ uv sync
 ### Run the application
 
 ```bash
+# Auto-discover oscilloscope via USB
 uv run python -m shutterscope
+
+# Connect via ethernet using VISA address
+uv run python -m shutterscope TCPIP::192.168.1.100::INSTR
+
+# Show help
+uv run python -m shutterscope --help
 ```
 
 ### Development
