@@ -13,4 +13,4 @@ def save_waveform(data: WaveformData, filename: str) -> None:
     with open(filename, "w") as f:
         f.write("time_s,voltage_v\n")
         for t, v in zip(data.times, data.voltages, strict=True):
-            f.write(f"{t},{v}\n")
+            f.write(f"{t:.9g},{v:.6g}\n")

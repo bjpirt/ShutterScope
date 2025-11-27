@@ -22,9 +22,9 @@ def test_save_waveform_creates_csv(tmp_path: Path) -> None:
     lines = content.strip().split("\n")
 
     assert lines[0] == "time_s,voltage_v"
-    assert lines[1] == "0.0,0.0"
+    assert lines[1] == "0,0"
     assert lines[2] == "1e-06,3.3"
-    assert lines[3] == "2e-06,0.0"
+    assert lines[3] == "2e-06,0"
 
 
 def test_save_waveform_empty_data(tmp_path: Path) -> None:

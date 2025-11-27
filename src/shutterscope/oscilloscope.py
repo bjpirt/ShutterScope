@@ -248,22 +248,17 @@ class RigolDS1000Z:
         self._instrument.write(":WAVeform:MODE RAW")
         self._instrument.write(":WAVeform:FORMat BYTE")
 
-        # Determine how many points to download
-        # Use desired points if set by configure_timebase, otherwise query memory depth
-        if self._desired_points is not None:
-            total_points = self._desired_points
+        # Query actual memory depth to know total points available
+        mem_depth_str = self._instrument.query(":ACQuire:MDEPth?").strip()
+        # Handle "AUTO" or numeric response
+        if mem_depth_str == "AUTO":
+            # Query the actual sample rate and calculate
+            sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
+            timebase_str = self._instrument.query(":TIMebase:MAIN:SCALe?")
+            timebase = float(timebase_str.strip())
+            total_points = int(sample_rate * timebase * 12)
         else:
-            # Query actual memory depth to know total points available
-            mem_depth_str = self._instrument.query(":ACQuire:MDEPth?").strip()
-            # Handle "AUTO" or numeric response
-            if mem_depth_str == "AUTO":
-                # Query the actual sample rate and calculate
-                sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
-                timebase_str = self._instrument.query(":TIMebase:MAIN:SCALe?")
-                timebase = float(timebase_str.strip())
-                total_points = int(sample_rate * timebase * 12)
-            else:
-                total_points = int(float(mem_depth_str))
+            total_points = int(float(mem_depth_str))
 
         # Set initial range to get preamble with correct scaling
         self._instrument.write(":WAVeform:STARt 1")
