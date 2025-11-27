@@ -37,6 +37,9 @@ uv run python -m shutterscope --max-shutter 2.0
 # Set custom trigger level (default 1.0V)
 uv run python -m shutterscope --trigger-level 0.5
 
+# Save a plot image for debugging
+uv run python -m shutterscope --plot
+
 # Show help
 uv run python -m shutterscope --help
 ```

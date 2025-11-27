@@ -161,11 +161,16 @@ class RigolDS1000Z:
         # Store the desired depth for optimized downloads
         self._desired_points = desired_depth
 
-        # Find the smallest valid memory depth that meets our requirement
-        memory_depth = self.MEMORY_DEPTHS[-1]  # Default to max
+        # Find the closest valid memory depth to our requirement
+        # Larger depth = higher sample rate (not longer time), so pick closest match
+        memory_depth = self.MEMORY_DEPTHS[0]
         for depth in self.MEMORY_DEPTHS:
-            if depth >= desired_depth:
+            if depth <= desired_depth:
                 memory_depth = depth
+            else:
+                # Check if this larger depth is closer than the smaller one
+                if abs(depth - desired_depth) < abs(memory_depth - desired_depth):
+                    memory_depth = depth
                 break
 
         # Set timebase scale first
@@ -174,8 +179,13 @@ class RigolDS1000Z:
         # Set memory depth (must use valid values)
         self._instrument.write(f":ACQuire:MDEPth {memory_depth}")
 
-        # Verify memory depth was set
-        self._instrument.query(":ACQuire:MDEPth?").strip()
+        # Verify settings were applied
+        actual_timebase = self._instrument.query(":TIMebase:MAIN:SCALe?").strip()
+        actual_depth = self._instrument.query(":ACQuire:MDEPth?").strip()
+        actual_srate = self._instrument.query(":ACQuire:SRATe?").strip()
+        print(f"DEBUG: Requested timebase={time_per_div}, actual={actual_timebase}")
+        print(f"DEBUG: Requested depth={memory_depth}, actual={actual_depth}")
+        print(f"DEBUG: Sample rate={actual_srate}")
 
         # Set trigger offset to put trigger near right edge of screen
         # Positive offset shifts waveform left, putting trigger toward right
@@ -269,11 +279,26 @@ class RigolDS1000Z:
         #         yincrement,yorigin,yreference
         preamble_raw = self._instrument.query(":WAVeform:PREamble?").strip()
         preamble = preamble_raw.split(",")
-        x_increment = float(preamble[4])
-        x_origin = float(preamble[5])
         y_increment = float(preamble[7])
         y_origin = float(preamble[8])
         y_reference = float(preamble[9])
+
+        # Calculate time values from actual sample rate (preamble x values are wrong
+        # in RAW mode on DS1000Z - they return screen mode values instead)
+        sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
+        x_increment = 1.0 / sample_rate
+
+        # Calculate x_origin: the time of the first sample relative to trigger
+        # In RAW mode, data is centered around the trigger point, so:
+        # - First sample is at -(total_points/2) * x_increment from trigger
+        # - Then we add the timebase offset (which shifts the trigger position)
+        offset_str = self._instrument.query(":TIMebase:MAIN:OFFSet?").strip()
+        timebase_offset = float(offset_str)
+        x_origin = timebase_offset - (total_points / 2) * x_increment
+
+        print(f"DEBUG: sample_rate={sample_rate}, x_increment={x_increment}")
+        print(f"DEBUG: total_points={total_points}, timebase_offset={timebase_offset}")
+        print(f"DEBUG: x_origin={x_origin}")
 
         # Read data in chunks (max 250000 points per read for stability)
         chunk_size = 250000

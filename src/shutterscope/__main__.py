@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from shutterscope.oscilloscope import RigolDS1000Z
-from shutterscope.waveform import save_waveform
+from shutterscope.waveform import save_waveform, save_waveform_plot
 
 # Default trigger level in volts - adjust as needed
 DEFAULT_TRIGGER_LEVEL = 1.0
@@ -36,6 +36,11 @@ def main() -> None:
         type=float,
         default=DEFAULT_TRIGGER_LEVEL,
         help=f"Trigger level in volts (default: {DEFAULT_TRIGGER_LEVEL})",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Save a plot of the waveform to capture.png",
     )
     args = parser.parse_args()
 
@@ -69,6 +74,9 @@ def main() -> None:
             waveform = scope.get_waveform(channel=1)
             save_waveform(waveform, "capture.csv")
             print(f"Saved {len(waveform.voltages)} samples to capture.csv")
+            if args.plot:
+                save_waveform_plot(waveform, "capture.png")
+                print("Saved plot to capture.png")
         else:
             print("Trigger timeout")
             sys.exit(1)
