@@ -8,6 +8,10 @@ from shutterscope.waveform import save_waveform
 
 # Default trigger level in volts - adjust as needed
 DEFAULT_TRIGGER_LEVEL = 1.0
+# Default maximum shutter time in seconds
+DEFAULT_MAX_SHUTTER = 0.1
+# Default sample interval in seconds (1 microsecond)
+DEFAULT_SAMPLE_INTERVAL = 1e-6
 
 
 def main() -> None:
@@ -20,6 +24,18 @@ def main() -> None:
         nargs="?",
         help="VISA address (e.g., TCPIP::192.168.1.100::INSTR). "
         "If not provided, auto-discovers via USB.",
+    )
+    parser.add_argument(
+        "--max-shutter",
+        type=float,
+        default=DEFAULT_MAX_SHUTTER,
+        help=f"Maximum shutter time in seconds (default: {DEFAULT_MAX_SHUTTER})",
+    )
+    parser.add_argument(
+        "--trigger-level",
+        type=float,
+        default=DEFAULT_TRIGGER_LEVEL,
+        help=f"Trigger level in volts (default: {DEFAULT_TRIGGER_LEVEL})",
     )
     args = parser.parse_args()
 
@@ -38,8 +54,14 @@ def main() -> None:
     print("Connected to oscilloscope")
 
     try:
-        scope.setup_edge_trigger(channel=1, level=DEFAULT_TRIGGER_LEVEL)
-        print(f"Trigger set on channel 1 at {DEFAULT_TRIGGER_LEVEL}V")
+        scope.configure_timebase(
+            max_duration=args.max_shutter,
+            sample_interval=DEFAULT_SAMPLE_INTERVAL,
+        )
+        print(f"Configured for max {args.max_shutter}s shutter, 1µs sample interval")
+
+        scope.setup_edge_trigger(channel=1, level=args.trigger_level)
+        print(f"Trigger set on channel 1 at {args.trigger_level}V (falling edge)")
 
         print("Waiting for trigger...")
         if scope.wait_for_trigger(timeout=30.0):

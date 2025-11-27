@@ -31,9 +31,17 @@ uv run python -m shutterscope
 # Connect via ethernet using VISA address
 uv run python -m shutterscope TCPIP::192.168.1.100::INSTR
 
+# Configure for slower shutters (default is 0.1s, up to 2 seconds shown here)
+uv run python -m shutterscope --max-shutter 2.0
+
+# Set custom trigger level (default 1.0V)
+uv run python -m shutterscope --trigger-level 0.5
+
 # Show help
 uv run python -m shutterscope --help
 ```
+
+The application triggers on the falling edge of the signal, capturing the pulse that occurred before the trigger. This allows reliable capture of shutter pulses regardless of their duration (up to `--max-shutter`). Samples are taken at 1µs intervals.
 
 ### Development
 

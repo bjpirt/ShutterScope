@@ -32,15 +32,26 @@ class OscilloscopeProtocol(Protocol):
         """Disconnect from the oscilloscope."""
         ...
 
+    def configure_timebase(
+        self, max_duration: float, sample_interval: float = 1e-6
+    ) -> None:
+        """Configure timebase for pulse capture.
+
+        Args:
+            max_duration: Maximum expected pulse duration in seconds
+            sample_interval: Desired time between samples in seconds (default 1µs)
+        """
+        ...
+
     def setup_edge_trigger(
-        self, channel: int, level: float, slope: str = "POS"
+        self, channel: int, level: float, slope: str = "NEG"
     ) -> None:
         """Configure edge trigger on the specified channel.
 
         Args:
             channel: Channel number (1-4)
             level: Trigger level in volts
-            slope: Trigger slope - "POS" for rising edge, "NEG" for falling edge
+            slope: Trigger slope - "NEG" for falling edge, "POS" for rising edge
         """
         ...
 
@@ -99,6 +110,7 @@ class RigolDS1000Z:
         """
         self._resource = resource
         self._instrument: MessageBasedResource | None = None
+        self._desired_points: int | None = None
 
     def connect(self) -> None:
         """Connect to the oscilloscope."""
@@ -112,15 +124,73 @@ class RigolDS1000Z:
             self._instrument.close()
             self._instrument = None
 
+    # Valid memory depth values for DS1000Z (single channel)
+    MEMORY_DEPTHS = [1000, 10000, 100000, 1000000, 6000000, 12000000]
+
+    def configure_timebase(
+        self, max_duration: float, sample_interval: float = 1e-6
+    ) -> None:
+        """Configure timebase for pulse capture.
+
+        Sets up the oscilloscope to capture a pulse of up to max_duration seconds,
+        with the trigger point near the right edge of the screen so most of the
+        capture window shows the pulse before the falling edge trigger.
+
+        Args:
+            max_duration: Maximum expected pulse duration in seconds
+            sample_interval: Desired time between samples in seconds (default 1µs)
+        """
+        if self._instrument is None:
+            raise RuntimeError("Not connected to oscilloscope")
+
+        # Stop acquisition before changing settings
+        self._instrument.write(":STOP")
+
+        # Calculate timebase scale (time per division)
+        # DS1000Z has 12 horizontal divisions
+        # We want max_duration to fit in ~10 divisions (leaving margin)
+        time_per_div = max_duration / 10.0
+
+        # Calculate memory depth needed for desired sample interval
+        # Sample Rate = Memory Depth / (TimePerDiv * 12)
+        # Memory Depth = Sample Rate * TimePerDiv * 12
+        # Sample Rate = 1 / sample_interval
+        total_time = time_per_div * 12
+        desired_depth = int(total_time / sample_interval)
+
+        # Store the desired depth for optimized downloads
+        self._desired_points = desired_depth
+
+        # Find the smallest valid memory depth that meets our requirement
+        memory_depth = self.MEMORY_DEPTHS[-1]  # Default to max
+        for depth in self.MEMORY_DEPTHS:
+            if depth >= desired_depth:
+                memory_depth = depth
+                break
+
+        # Set timebase scale first
+        self._instrument.write(f":TIMebase:MAIN:SCALe {time_per_div}")
+
+        # Set memory depth (must use valid values)
+        self._instrument.write(f":ACQuire:MDEPth {memory_depth}")
+
+        # Verify memory depth was set
+        self._instrument.query(":ACQuire:MDEPth?").strip()
+
+        # Set trigger offset to put trigger near right edge of screen
+        # Positive offset shifts waveform left, putting trigger toward right
+        trigger_offset = time_per_div * 5  # 5 divisions worth
+        self._instrument.write(f":TIMebase:MAIN:OFFSet {trigger_offset}")
+
     def setup_edge_trigger(
-        self, channel: int, level: float, slope: str = "POS"
+        self, channel: int, level: float, slope: str = "NEG"
     ) -> None:
         """Configure edge trigger on the specified channel.
 
         Args:
             channel: Channel number (1-4)
             level: Trigger level in volts
-            slope: Trigger slope - "POS" for rising edge, "NEG" for falling edge
+            slope: Trigger slope - "NEG" for falling edge, "POS" for rising edge
         """
         if self._instrument is None:
             raise RuntimeError("Not connected to oscilloscope")
@@ -156,7 +226,9 @@ class RigolDS1000Z:
         return False
 
     def get_waveform(self, channel: int) -> WaveformData:
-        """Retrieve waveform data from the specified channel.
+        """Retrieve waveform data from the specified channel using RAW binary mode.
+
+        Downloads the full memory depth in chunks for efficient transfer.
 
         Args:
             channel: Channel number (1-4)
@@ -167,22 +239,71 @@ class RigolDS1000Z:
         if self._instrument is None:
             raise RuntimeError("Not connected to oscilloscope")
 
+        # Ensure acquisition is stopped
+        self._instrument.write(":STOP")
+        time.sleep(0.1)  # Give scope time to finish stopping
+
+        # Configure waveform source and RAW binary mode
         self._instrument.write(f":WAVeform:SOURce CHAN{channel}")
-        self._instrument.write(":WAVeform:MODE NORMal")
-        self._instrument.write(":WAVeform:FORMat ASCii")
+        self._instrument.write(":WAVeform:MODE RAW")
+        self._instrument.write(":WAVeform:FORMat BYTE")
 
-        x_increment = float(self._instrument.query(":WAVeform:XINCrement?"))
-        x_origin = float(self._instrument.query(":WAVeform:XORigin?"))
+        # Determine how many points to download
+        # Use desired points if set by configure_timebase, otherwise query memory depth
+        if self._desired_points is not None:
+            total_points = self._desired_points
+        else:
+            # Query actual memory depth to know total points available
+            mem_depth_str = self._instrument.query(":ACQuire:MDEPth?").strip()
+            # Handle "AUTO" or numeric response
+            if mem_depth_str == "AUTO":
+                # Query the actual sample rate and calculate
+                sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
+                timebase_str = self._instrument.query(":TIMebase:MAIN:SCALe?")
+                timebase = float(timebase_str.strip())
+                total_points = int(sample_rate * timebase * 12)
+            else:
+                total_points = int(float(mem_depth_str))
 
-        raw_data = self._instrument.query(":WAVeform:DATA?")
-        # Remove header (e.g., "#9000001200") if present
-        if raw_data.startswith("#"):
-            header_len = int(raw_data[1]) + 2
-            raw_data = raw_data[header_len:]
+        # Set initial range to get preamble with correct scaling
+        self._instrument.write(":WAVeform:STARt 1")
+        self._instrument.write(f":WAVeform:STOP {min(total_points, 250000)}")
 
-        voltage_strings = raw_data.strip().split(",")
-        voltages = [float(v) for v in voltage_strings if v]
+        # Get preamble for voltage conversion
+        # Format: format,type,points,count,xincrement,xorigin,xreference,
+        #         yincrement,yorigin,yreference
+        preamble_raw = self._instrument.query(":WAVeform:PREamble?").strip()
+        preamble = preamble_raw.split(",")
+        x_increment = float(preamble[4])
+        x_origin = float(preamble[5])
+        y_increment = float(preamble[7])
+        y_origin = float(preamble[8])
+        y_reference = float(preamble[9])
 
+        # Read data in chunks (max 250000 points per read for stability)
+        chunk_size = 250000
+        raw_bytes: list[float] = []
+
+        for start in range(1, total_points + 1, chunk_size):
+            stop = min(start + chunk_size - 1, total_points)
+            self._instrument.write(f":WAVeform:STARt {start}")
+            self._instrument.write(f":WAVeform:STOP {stop}")
+
+            # Read binary data (returns unsigned bytes)
+            chunk = list(
+                self._instrument.query_binary_values(
+                    ":WAVeform:DATA?", datatype="B", container=list
+                )
+            )
+            raw_bytes.extend(chunk)
+
+        # Convert bytes to voltages
+        # Formula: voltage = (byte - yorigin - yreference) * yincrement
+        voltages = [
+            (byte_val - y_origin - y_reference) * y_increment for byte_val in raw_bytes
+        ]
+
+        # Generate time values
         times = [x_origin + i * x_increment for i in range(len(voltages))]
         sample_rate = 1.0 / x_increment if x_increment > 0 else 0.0
 
