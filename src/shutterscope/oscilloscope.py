@@ -295,6 +295,10 @@ class RigolDS1000Z:
         y_origin = float(preamble[8])
         y_reference = float(preamble[9])
 
+        # Get channel offset - needed to correct voltage readings
+        # The preamble values don't account for the display offset properly
+        chan_offset = float(self._instrument.query(f":CHAN{channel}:OFFSet?").strip())
+
         # Get actual sample rate (preamble x_increment is wrong in RAW mode)
         sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
 
@@ -320,9 +324,11 @@ class RigolDS1000Z:
             raw_bytes.extend(chunk)
 
         # Convert bytes to voltages
-        # Formula: voltage = (byte - yorigin - yreference) * yincrement
+        # Formula: voltage = (byte - yorigin - yreference) * yincrement - chan_offset
+        # The channel offset must be subtracted as the preamble includes it inverted
         voltages = [
-            (byte_val - y_origin - y_reference) * y_increment for byte_val in raw_bytes
+            (byte_val - y_origin - y_reference) * y_increment - chan_offset
+            for byte_val in raw_bytes
         ]
 
         return WaveformData(
