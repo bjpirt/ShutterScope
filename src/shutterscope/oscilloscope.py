@@ -120,7 +120,6 @@ class RigolDS1000Z:
         """
         self._resource = resource
         self._instrument: MessageBasedResource | None = None
-        self._desired_points: int | None = None
 
     def connect(self) -> None:
         """Connect to the oscilloscope."""
@@ -167,9 +166,6 @@ class RigolDS1000Z:
         # Sample Rate = 1 / sample_interval
         total_time = time_per_div * 12
         desired_depth = int(total_time / sample_interval)
-
-        # Store the desired depth for optimized downloads
-        self._desired_points = desired_depth
 
         # Find the closest valid memory depth to our requirement
         # Larger depth = higher sample rate (not longer time), so pick closest match
@@ -290,7 +286,6 @@ class RigolDS1000Z:
         #         yincrement,yorigin,yreference
         preamble_raw = self._instrument.query(":WAVeform:PREamble?").strip()
         preamble = preamble_raw.split(",")
-        preamble_xorigin = float(preamble[5])
         y_increment = float(preamble[7])
         y_origin = float(preamble[8])
         y_reference = float(preamble[9])
@@ -302,9 +297,20 @@ class RigolDS1000Z:
         # Get actual sample rate (preamble x_increment is wrong in RAW mode)
         sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
 
-        # Use preamble's xorigin - it correctly reflects the trigger position
-        # even though the x_increment value is wrong in RAW mode
-        x_origin = preamble_xorigin
+        # Calculate x_origin for RAW mode
+        # In RAW mode, we download the entire memory buffer. The trigger point
+        # is at a specific position within this buffer, determined by the
+        # trigger offset setting. The total capture duration is total_points / sample_rate.
+        # The trigger offset tells us where t=0 is relative to the screen center.
+        total_duration = total_points / sample_rate
+        trigger_offset = float(
+            self._instrument.query(":TIMebase:MAIN:OFFSet?").strip()
+        )
+        # With negative trigger offset, trigger is to the right of center,
+        # meaning more pre-trigger data. The start of memory is at:
+        # -(half of total duration) + trigger_offset
+        # (trigger_offset is negative when trigger is right of center)
+        x_origin = -(total_duration / 2) + trigger_offset
 
         # Read data in chunks (max 250000 points per read for stability)
         chunk_size = 250000
