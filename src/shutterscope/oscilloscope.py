@@ -194,9 +194,12 @@ class RigolDS1000Z:
         trigger_offset = -time_per_div * 5  # 5 divisions to the right
         self._instrument.write(f":TIMebase:MAIN:OFFSet {trigger_offset}")
 
-        # Reset channel 1 vertical settings to defaults
-        self._instrument.write(":CHAN1:SCALe 1")  # 1V per division
-        self._instrument.write(":CHAN1:OFFSet 0")  # No vertical offset
+        # Configure vertical scale for 0-2.5V signal with 1 div margin top/bottom
+        # DS1000Z has 8 vertical divisions. With 0.5V/div, total range = 4V
+        # Negative offset moves 0V down on screen
+        # To put 0V at 1 div from bottom (3 divs below center): offset = -1.5V
+        self._instrument.write(":CHAN1:SCALe 0.5")  # 0.5V per division
+        self._instrument.write(":CHAN1:OFFSet -1.5")  # Shift 0V down to 1 div from bottom
         self._instrument.write(":CHAN1:DISPlay ON")  # Ensure channel is displayed
 
 
