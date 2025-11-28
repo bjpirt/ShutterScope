@@ -36,7 +36,7 @@ def test_mock_oscilloscope_implements_protocol() -> None:
         def setup_edge_trigger(
             self, channel: int, level: float, slope: str = "NEG"
         ) -> None: ...
-        def wait_for_trigger(self, timeout: float = 10.0) -> bool: ...
+        def wait_for_trigger(self) -> None: ...
         def get_waveform(self, channel: int) -> WaveformData: ...
 
     mock = MockOscilloscope()
@@ -69,21 +69,6 @@ def test_mock_oscilloscope_custom_waveform() -> None:
     assert result.voltages == [5.0, 0.0]
     assert result.sample_rate == 1000.0
     assert result.start_time == 0.0
-
-
-def test_mock_oscilloscope_wait_for_trigger_default() -> None:
-    """Verify trigger returns True by default."""
-    mock = MockOscilloscope()
-
-    assert mock.wait_for_trigger(timeout=1.0) is True
-
-
-def test_mock_oscilloscope_wait_for_trigger_configurable() -> None:
-    """Verify trigger result can be configured."""
-    mock = MockOscilloscope()
-    mock.set_trigger_result(False)
-
-    assert mock.wait_for_trigger(timeout=1.0) is False
 
 
 def test_oscilloscope_protocol_is_protocol() -> None:

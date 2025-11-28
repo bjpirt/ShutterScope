@@ -10,7 +10,6 @@ class MockOscilloscope:
 
     def __init__(self) -> None:
         self._connected = False
-        self._triggered = True
         self._waveform_data: WaveformData | None = None
 
     def connect(self) -> None:
@@ -29,8 +28,8 @@ class MockOscilloscope:
     ) -> None:
         pass
 
-    def wait_for_trigger(self, timeout: float = 10.0) -> bool:
-        return self._triggered
+    def wait_for_trigger(self) -> None:
+        pass
 
     def get_waveform(self, channel: int) -> WaveformData:
         if self._waveform_data is not None:
@@ -42,10 +41,6 @@ class MockOscilloscope:
     def set_waveform(self, waveform: WaveformData) -> None:
         """Set custom waveform data for testing."""
         self._waveform_data = waveform
-
-    def set_trigger_result(self, triggered: bool) -> None:
-        """Set whether wait_for_trigger returns True or False."""
-        self._triggered = triggered
 
 
 @pytest.fixture

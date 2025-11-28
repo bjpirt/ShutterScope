@@ -2,6 +2,8 @@
 
 import argparse
 import sys
+from datetime import datetime
+from pathlib import Path
 
 from shutterscope.analysis import PulseMeasurementError, measure_pulse_width
 from shutterscope.oscilloscope import RigolDS1000Z
@@ -15,6 +17,8 @@ DEFAULT_SAMPLE_INTERVAL = 1e-6
 MAX_CAPTURE_WINDOW = 1.0
 # Margin around pulse when trimming (as fraction of pulse width)
 TRIM_MARGIN_FRACTION = 0.1
+# Directory for saving captures
+CAPTURES_DIR = Path("captures")
 
 
 def main() -> None:
@@ -55,18 +59,23 @@ def main() -> None:
 
     print("Connected to oscilloscope")
 
+    # Create captures directory if needed
+    CAPTURES_DIR.mkdir(exist_ok=True)
+
+    capture_count = 0
     try:
         scope.configure_timebase(
             max_duration=MAX_CAPTURE_WINDOW,
             sample_interval=DEFAULT_SAMPLE_INTERVAL,
         )
         print("Configured oscilloscope")
+        print("Press Ctrl+C to exit\n")
 
-        scope.setup_edge_trigger(channel=1, level=args.trigger_level)
-        print(f"Trigger set on channel 1 at {args.trigger_level}V (falling edge)")
+        while True:
+            scope.setup_edge_trigger(channel=1, level=args.trigger_level)
+            print("Waiting for trigger...")
 
-        print("Waiting for trigger...")
-        if scope.wait_for_trigger(timeout=30.0):
+            scope.wait_for_trigger()
             print("Triggered! Downloading waveform...")
             waveform = scope.get_waveform(channel=1)
 
@@ -75,7 +84,7 @@ def main() -> None:
                 metrics = measure_pulse_width(waveform)
                 print(
                     f"Shutter speed: {metrics.pulse_width_ms:.2f} ms "
-                    f"({metrics.shutter_speed_fraction})"
+                    f"({metrics.shutter_speed_fraction} s)"
                 )
                 # Trim to pulse with margin
                 margin = metrics.pulse_width_s * TRIM_MARGIN_FRACTION
@@ -87,14 +96,19 @@ def main() -> None:
                 print(f"Warning: Could not measure pulse: {e}")
                 metrics = None
 
-            save_waveform_json(waveform, "capture.json", metrics)
-            print(f"Saved {len(waveform.voltages)} samples to capture.json")
+            capture_count += 1
+            timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            filename = CAPTURES_DIR / f"capture_{timestamp}.json"
+            save_waveform_json(waveform, str(filename), metrics)
+            print(f"Saved {len(waveform.voltages)} samples to {filename}")
             if args.plot:
-                save_waveform_plot(waveform, "capture.png")
-                print("Saved plot to capture.png")
-        else:
-            print("Trigger timeout")
-            sys.exit(1)
+                plot_filename = CAPTURES_DIR / f"capture_{timestamp}.png"
+                save_waveform_plot(waveform, str(plot_filename))
+                print(f"Saved plot to {plot_filename}")
+            print()
+
+    except KeyboardInterrupt:
+        print(f"\nCaptured {capture_count} waveforms")
     finally:
         scope.disconnect()
         print("Disconnected")

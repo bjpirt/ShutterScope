@@ -86,15 +86,8 @@ class OscilloscopeProtocol(Protocol):
         """
         ...
 
-    def wait_for_trigger(self, timeout: float = 10.0) -> bool:
-        """Wait for the oscilloscope to trigger.
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            True if triggered, False if timeout occurred
-        """
+    def wait_for_trigger(self) -> None:
+        """Wait indefinitely for the oscilloscope to trigger."""
         ...
 
     def get_waveform(self, channel: int) -> WaveformData:
@@ -242,27 +235,16 @@ class RigolDS1000Z:
         self._instrument.write(":TRIGger:SWEep SINGle")
         self._instrument.write(":SINGle")
 
-    def wait_for_trigger(self, timeout: float = 10.0) -> bool:
-        """Wait for the oscilloscope to trigger.
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            True if triggered, False if timeout occurred
-        """
+    def wait_for_trigger(self) -> None:
+        """Wait indefinitely for the oscilloscope to trigger."""
         if self._instrument is None:
             raise RuntimeError("Not connected to oscilloscope")
 
-        start_time = time.time()
-        while time.time() - start_time < timeout:
+        while True:
             status = self._instrument.query(":TRIGger:STATus?").strip()
-            if status == "TD":
-                return True
-            if status == "STOP":
-                return True
+            if status in ("TD", "STOP"):
+                return
             time.sleep(0.1)
-        return False
 
     def get_waveform(self, channel: int) -> WaveformData:
         """Retrieve waveform data from the specified channel using RAW binary mode.
