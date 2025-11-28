@@ -93,3 +93,55 @@ def test_oscilloscope_protocol_is_protocol() -> None:
     assert hasattr(OscilloscopeProtocol, "__protocol_attrs__") or issubclass(
         OscilloscopeProtocol, Protocol
     )
+
+
+def test_waveform_trim_basic() -> None:
+    """Test basic waveform trimming."""
+    # 100 samples at 1MHz starting at t=0
+    voltages = list(range(100))
+    waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=0.0)
+
+    # Trim to samples 20-80 (20µs to 80µs)
+    trimmed = waveform.trim(20e-6, 80e-6)
+
+    assert len(trimmed.voltages) == 60
+    assert trimmed.voltages[0] == 20
+    assert trimmed.voltages[-1] == 79
+    assert trimmed.sample_rate == 1e6
+    assert trimmed.start_time == 20e-6
+
+
+def test_waveform_trim_with_negative_start_time() -> None:
+    """Test trimming waveform with negative start time."""
+    # 100 samples at 1MHz starting at t=-50µs
+    voltages = list(range(100))
+    waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=-50e-6)
+
+    # Trim to -20µs to +20µs (samples 30-70)
+    trimmed = waveform.trim(-20e-6, 20e-6)
+
+    assert len(trimmed.voltages) == 40
+    assert trimmed.voltages[0] == 30
+    assert trimmed.start_time == -20e-6
+
+
+def test_waveform_trim_clamps_to_bounds() -> None:
+    """Test that trim clamps to waveform boundaries."""
+    voltages = list(range(100))
+    waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=0.0)
+
+    # Try to trim beyond boundaries
+    trimmed = waveform.trim(-50e-6, 200e-6)
+
+    # Should return all samples since requested range exceeds data
+    assert len(trimmed.voltages) == 100
+    assert trimmed.start_time == 0.0
+
+
+def test_waveform_trim_preserves_sample_rate() -> None:
+    """Test that trim preserves sample rate."""
+    waveform = WaveformData(voltages=list(range(100)), sample_rate=2e6, start_time=0.0)
+
+    trimmed = waveform.trim(10e-6, 40e-6)
+
+    assert trimmed.sample_rate == 2e6
