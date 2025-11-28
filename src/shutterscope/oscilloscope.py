@@ -195,9 +195,10 @@ class RigolDS1000Z:
         # Negative offset moves 0V down on screen
         # To put 0V at 1 div from bottom (3 divs below center): offset = -1.5V
         self._instrument.write(":CHAN1:SCALe 0.5")  # 0.5V per division
-        self._instrument.write(":CHAN1:OFFSet -1.5")  # Shift 0V down to 1 div from bottom
+        self._instrument.write(
+            ":CHAN1:OFFSet -1.5"
+        )  # Shift 0V down to 1 div from bottom
         self._instrument.write(":CHAN1:DISPlay ON")  # Ensure channel is displayed
-
 
     def setup_edge_trigger(
         self, channel: int, level: float, slope: str = "NEG"
@@ -300,12 +301,10 @@ class RigolDS1000Z:
         # Calculate x_origin for RAW mode
         # In RAW mode, we download the entire memory buffer. The trigger point
         # is at a specific position within this buffer, determined by the
-        # trigger offset setting. The total capture duration is total_points / sample_rate.
-        # The trigger offset tells us where t=0 is relative to the screen center.
+        # trigger offset setting. Total duration = total_points / sample_rate.
+        # The trigger offset tells us where t=0 is relative to screen center.
         total_duration = total_points / sample_rate
-        trigger_offset = float(
-            self._instrument.query(":TIMebase:MAIN:OFFSet?").strip()
-        )
+        trigger_offset = float(self._instrument.query(":TIMebase:MAIN:OFFSet?").strip())
         # With negative trigger offset, trigger is to the right of center,
         # meaning more pre-trigger data. The start of memory is at:
         # -(half of total duration) + trigger_offset

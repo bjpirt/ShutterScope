@@ -1,30 +1,44 @@
 """Waveform data handling for ShutterScope."""
 
+from __future__ import annotations
+
 import json
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 
 from shutterscope.oscilloscope import WaveformData
 
+if TYPE_CHECKING:
+    from shutterscope.analysis import PulseMetrics
+
 # Current JSON schema version
 WAVEFORM_JSON_VERSION = 1
 
 
-def save_waveform_json(data: WaveformData, filename: str) -> None:
+def save_waveform_json(
+    data: WaveformData, filename: str, metrics: PulseMetrics | None = None
+) -> None:
     """Save waveform data to a JSON file.
 
     Args:
         data: WaveformData to save
         filename: Path to the output JSON file
+        metrics: Optional pulse metrics to include in the file
     """
-    output = {
+    output: dict[str, object] = {
         "version": WAVEFORM_JSON_VERSION,
         "capture_time": datetime.now(UTC).isoformat(),
         "sample_rate_hz": data.sample_rate,
         "start_time_s": data.start_time,
         "samples": [round(v, 6) for v in data.voltages],
     }
+
+    if metrics is not None:
+        output["shutter_speed_s"] = metrics.pulse_width_s
+        output["shutter_speed_fraction"] = metrics.shutter_speed_fraction
+
     with open(filename, "w") as f:
         json.dump(output, f)
 

@@ -3,6 +3,7 @@
 import argparse
 import sys
 
+from shutterscope.analysis import PulseMeasurementError, measure_pulse_width
 from shutterscope.oscilloscope import RigolDS1000Z
 from shutterscope.waveform import save_waveform_json, save_waveform_plot
 
@@ -72,7 +73,19 @@ def main() -> None:
         if scope.wait_for_trigger(timeout=30.0):
             print("Triggered! Downloading waveform...")
             waveform = scope.get_waveform(channel=1)
-            save_waveform_json(waveform, "capture.json")
+
+            # Measure shutter speed
+            try:
+                metrics = measure_pulse_width(waveform)
+                print(
+                    f"Shutter speed: {metrics.pulse_width_ms:.2f} ms "
+                    f"({metrics.shutter_speed_fraction})"
+                )
+            except PulseMeasurementError as e:
+                print(f"Warning: Could not measure pulse: {e}")
+                metrics = None
+
+            save_waveform_json(waveform, "capture.json", metrics)
             print(f"Saved {len(waveform.voltages)} samples to capture.json")
             if args.plot:
                 save_waveform_plot(waveform, "capture.png")
