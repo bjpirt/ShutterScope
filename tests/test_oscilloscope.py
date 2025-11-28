@@ -8,16 +8,18 @@ from .conftest import MockOscilloscope
 
 
 def test_waveform_data_dataclass() -> None:
-    """Verify WaveformData stores times, voltages, sample_rate correctly."""
-    times = [0.0, 1e-6, 2e-6]
+    """Verify WaveformData stores voltages, sample_rate, start_time correctly."""
     voltages = [1.0, 2.0, 3.0]
     sample_rate = 1e6
+    start_time = -0.001
 
-    waveform = WaveformData(times=times, voltages=voltages, sample_rate=sample_rate)
+    waveform = WaveformData(
+        voltages=voltages, sample_rate=sample_rate, start_time=start_time
+    )
 
-    assert waveform.times == times
     assert waveform.voltages == voltages
     assert waveform.sample_rate == sample_rate
+    assert waveform.start_time == start_time
 
 
 def test_mock_oscilloscope_implements_protocol() -> None:
@@ -48,8 +50,7 @@ def test_mock_oscilloscope_get_waveform() -> None:
     waveform = mock.get_waveform(channel=1)
 
     assert isinstance(waveform, WaveformData)
-    assert len(waveform.times) == len(waveform.voltages)
-    assert len(waveform.times) > 0
+    assert len(waveform.voltages) > 0
     assert waveform.sample_rate > 0
 
 
@@ -57,17 +58,17 @@ def test_mock_oscilloscope_custom_waveform() -> None:
     """Verify mock can return custom waveform data."""
     mock = MockOscilloscope()
     custom_waveform = WaveformData(
-        times=[0.0, 0.001],
         voltages=[5.0, 0.0],
         sample_rate=1000.0,
+        start_time=0.0,
     )
     mock.set_waveform(custom_waveform)
 
     result = mock.get_waveform(channel=1)
 
-    assert result.times == [0.0, 0.001]
     assert result.voltages == [5.0, 0.0]
     assert result.sample_rate == 1000.0
+    assert result.start_time == 0.0
 
 
 def test_mock_oscilloscope_wait_for_trigger_default() -> None:

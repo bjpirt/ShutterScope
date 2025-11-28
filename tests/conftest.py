@@ -36,9 +36,8 @@ class MockOscilloscope:
         if self._waveform_data is not None:
             return self._waveform_data
         # Return a simple test waveform: 100 samples at 1MHz
-        times = [i * 1e-6 for i in range(100)]
         voltages = [0.0 if i < 20 or i >= 80 else 3.3 for i in range(100)]
-        return WaveformData(times=times, voltages=voltages, sample_rate=1e6)
+        return WaveformData(voltages=voltages, sample_rate=1e6, start_time=0.0)
 
     def set_waveform(self, waveform: WaveformData) -> None:
         """Set custom waveform data for testing."""

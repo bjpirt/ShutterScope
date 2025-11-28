@@ -4,10 +4,10 @@ import argparse
 import sys
 
 from shutterscope.oscilloscope import RigolDS1000Z
-from shutterscope.waveform import save_waveform, save_waveform_plot
+from shutterscope.waveform import save_waveform_json, save_waveform_plot
 
 # Default trigger level in volts - adjust as needed
-DEFAULT_TRIGGER_LEVEL = 1.0
+DEFAULT_TRIGGER_LEVEL = 0.2
 # Default maximum shutter time in seconds
 DEFAULT_MAX_SHUTTER = 0.1
 # Default sample interval in seconds (1 microsecond)
@@ -72,8 +72,8 @@ def main() -> None:
         if scope.wait_for_trigger(timeout=30.0):
             print("Triggered! Downloading waveform...")
             waveform = scope.get_waveform(channel=1)
-            save_waveform(waveform, "capture.csv")
-            print(f"Saved {len(waveform.voltages)} samples to capture.csv")
+            save_waveform_json(waveform, "capture.json")
+            print(f"Saved {len(waveform.voltages)} samples to capture.json")
             if args.plot:
                 save_waveform_plot(waveform, "capture.png")
                 print("Saved plot to capture.png")

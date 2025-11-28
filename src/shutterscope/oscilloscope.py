@@ -14,11 +14,21 @@ if TYPE_CHECKING:
 
 @dataclass
 class WaveformData:
-    """Captured waveform data from an oscilloscope."""
+    """Captured waveform data from an oscilloscope.
 
-    times: list[float]
+    Stores voltage samples with uniform time spacing. Time values can be
+    reconstructed as: time[i] = start_time + i / sample_rate
+    """
+
     voltages: list[float]
     sample_rate: float
+    start_time: float
+
+    def get_times(self) -> list[float]:
+        """Generate time values for each sample."""
+        return [
+            self.start_time + i / self.sample_rate for i in range(len(self.voltages))
+        ]
 
 
 class OscilloscopeProtocol(Protocol):
@@ -179,18 +189,16 @@ class RigolDS1000Z:
         # Set memory depth (must use valid values)
         self._instrument.write(f":ACQuire:MDEPth {memory_depth}")
 
-        # Verify settings were applied
-        actual_timebase = self._instrument.query(":TIMebase:MAIN:SCALe?").strip()
-        actual_depth = self._instrument.query(":ACQuire:MDEPth?").strip()
-        actual_srate = self._instrument.query(":ACQuire:SRATe?").strip()
-        print(f"DEBUG: Requested timebase={time_per_div}, actual={actual_timebase}")
-        print(f"DEBUG: Requested depth={memory_depth}, actual={actual_depth}")
-        print(f"DEBUG: Sample rate={actual_srate}")
-
         # Set trigger offset to put trigger near right edge of screen
-        # Positive offset shifts waveform left, putting trigger toward right
-        trigger_offset = time_per_div * 5  # 5 divisions worth
+        # Negative offset shifts trigger to the right, showing more pre-trigger data
+        trigger_offset = -time_per_div * 5  # 5 divisions to the right
         self._instrument.write(f":TIMebase:MAIN:OFFSet {trigger_offset}")
+
+        # Reset channel 1 vertical settings to defaults
+        self._instrument.write(":CHAN1:SCALe 1")  # 1V per division
+        self._instrument.write(":CHAN1:OFFSet 0")  # No vertical offset
+        self._instrument.write(":CHAN1:DISPlay ON")  # Ensure channel is displayed
+
 
     def setup_edge_trigger(
         self, channel: int, level: float, slope: str = "NEG"
@@ -279,26 +287,17 @@ class RigolDS1000Z:
         #         yincrement,yorigin,yreference
         preamble_raw = self._instrument.query(":WAVeform:PREamble?").strip()
         preamble = preamble_raw.split(",")
+        preamble_xorigin = float(preamble[5])
         y_increment = float(preamble[7])
         y_origin = float(preamble[8])
         y_reference = float(preamble[9])
 
-        # Calculate time values from actual sample rate (preamble x values are wrong
-        # in RAW mode on DS1000Z - they return screen mode values instead)
+        # Get actual sample rate (preamble x_increment is wrong in RAW mode)
         sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
-        x_increment = 1.0 / sample_rate
 
-        # Calculate x_origin: the time of the first sample relative to trigger
-        # In RAW mode, data is centered around the trigger point, so:
-        # - First sample is at -(total_points/2) * x_increment from trigger
-        # - Then we add the timebase offset (which shifts the trigger position)
-        offset_str = self._instrument.query(":TIMebase:MAIN:OFFSet?").strip()
-        timebase_offset = float(offset_str)
-        x_origin = timebase_offset - (total_points / 2) * x_increment
-
-        print(f"DEBUG: sample_rate={sample_rate}, x_increment={x_increment}")
-        print(f"DEBUG: total_points={total_points}, timebase_offset={timebase_offset}")
-        print(f"DEBUG: x_origin={x_origin}")
+        # Use preamble's xorigin - it correctly reflects the trigger position
+        # even though the x_increment value is wrong in RAW mode
+        x_origin = preamble_xorigin
 
         # Read data in chunks (max 250000 points per read for stability)
         chunk_size = 250000
@@ -323,8 +322,6 @@ class RigolDS1000Z:
             (byte_val - y_origin - y_reference) * y_increment for byte_val in raw_bytes
         ]
 
-        # Generate time values
-        times = [x_origin + i * x_increment for i in range(len(voltages))]
-        sample_rate = 1.0 / x_increment if x_increment > 0 else 0.0
-
-        return WaveformData(times=times, voltages=voltages, sample_rate=sample_rate)
+        return WaveformData(
+            voltages=voltages, sample_rate=sample_rate, start_time=x_origin
+        )
