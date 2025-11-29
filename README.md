@@ -1,6 +1,65 @@
 # ShutterScope
 
-This is a camera shutter tester that uses an Oscilloscope as the measurement device with a photodiode as the sensor. It supports the Rigol ds1000z range of oscilloscopes and connects via VISA to set up a trigger to capture the sensor data, extract it from the oscilloscope and analyse the shutter speed on the computer. It supports both three point sensors and single point sensors. The sensor design is being worked on at the moment.
+A camera shutter tester that uses an oscilloscope as the measurement device with photodiode sensors. It supports the Rigol DS1000Z range of oscilloscopes and connects via VISA to capture and analyze shutter timing data.
+
+## Features
+
+- **Single-point measurement**: Measure shutter speed at one point
+- **Three-point measurement**: Measure shutter timing across the frame to calculate curtain travel time and velocity
+- Automatic pulse detection and shutter speed calculation
+- Outputs standard shutter speed fractions (1/125, 1/250, etc.)
+- Saves waveform data as JSON and optional PNG plots
+
+## Example Output
+
+### Single-Point Measurement
+
+```
+$ uv run python -m shutterscope TCPIP::192.168.1.100::INSTR --plot
+
+Connecting to TCPIP::192.168.1.100::INSTR...
+Connected to oscilloscope
+Configured oscilloscope (single-channel mode)
+Press Ctrl+C to exit
+
+Waiting for trigger...
+Triggered! Downloading waveform...
+Shutter speed: 8.12 ms (1/125)
+Saved 9044 samples to captures/capture_2025-11-29T17:57:55.json
+Saved plot to captures/capture_2025-11-29T17:57:55.png
+```
+
+![Single-point measurement example](docs/single-point-example.png)
+
+### Three-Point Measurement
+
+```
+$ uv run python -m shutterscope TCPIP::192.168.1.100::INSTR --three-point --plot
+
+Connecting to TCPIP::192.168.1.100::INSTR...
+Connected to oscilloscope
+Configured oscilloscope (3-channel mode, horizontal)
+Press Ctrl+C to exit
+
+Waiting for trigger...
+Triggered! Downloading waveforms...
+
+Three-Point Shutter Measurement (horizontal):
+  First:  8.09 ms (1/125)
+  Center: 8.09 ms (1/125)
+  Last:   8.10 ms (1/125)
+
+  Travel Time:      9073.0 µs
+  First→Center:     4561.0 µs
+  Center→Last:      4512.0 µs
+  Curtain Velocity: 3.97 m/s
+  Uniformity:       99.9%
+
+Saved to captures/capture_2025-11-29T17:57:01.json
+Saved plot to captures/capture_2025-11-29T17:57:01.png
+```
+
+![Three-point measurement example](docs/three-point-example.png)
 
 ## Setup
 
