@@ -1,6 +1,6 @@
 # ShutterScope
 
-This is a camera shutter tester that uses an Oscilloscope as the measurement device with a photodiode as the sensor. It supports the Rigol ds1000z range of oscilloscopes and connects via VISA to set up a trigger to capture the sensor data, extract it from the oscilloscope and analyse the shutter speed on the computer.
+This is a camera shutter tester that uses an Oscilloscope as the measurement device with a photodiode as the sensor. It supports the Rigol ds1000z range of oscilloscopes and connects via VISA to set up a trigger to capture the sensor data, extract it from the oscilloscope and analyse the shutter speed on the computer. It supports both three point sensors and single point sensors. The sensor design is being worked on at the moment.
 
 ## Setup
 

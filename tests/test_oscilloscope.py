@@ -74,16 +74,16 @@ def test_mock_oscilloscope_custom_waveform() -> None:
 def test_oscilloscope_protocol_is_protocol() -> None:
     """Verify OscilloscopeProtocol is a proper Protocol class."""
     # This test ensures we're using Protocol correctly
-    # The class should have the Protocol base
-    assert hasattr(OscilloscopeProtocol, "__protocol_attrs__") or issubclass(
-        OscilloscopeProtocol, Protocol
+    # Protocol classes have _is_protocol attribute set to True
+    assert getattr(OscilloscopeProtocol, "_is_protocol", False) or hasattr(
+        OscilloscopeProtocol, "__protocol_attrs__"
     )
 
 
 def test_waveform_trim_basic() -> None:
     """Test basic waveform trimming."""
     # 100 samples at 1MHz starting at t=0
-    voltages = list(range(100))
+    voltages = [float(i) for i in range(100)]
     waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=0.0)
 
     # Trim to samples 20-80 (20µs to 80µs)
@@ -99,7 +99,7 @@ def test_waveform_trim_basic() -> None:
 def test_waveform_trim_with_negative_start_time() -> None:
     """Test trimming waveform with negative start time."""
     # 100 samples at 1MHz starting at t=-50µs
-    voltages = list(range(100))
+    voltages = [float(i) for i in range(100)]
     waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=-50e-6)
 
     # Trim to -20µs to +20µs (samples 30-70)
@@ -112,7 +112,7 @@ def test_waveform_trim_with_negative_start_time() -> None:
 
 def test_waveform_trim_clamps_to_bounds() -> None:
     """Test that trim clamps to waveform boundaries."""
-    voltages = list(range(100))
+    voltages = [float(i) for i in range(100)]
     waveform = WaveformData(voltages=voltages, sample_rate=1e6, start_time=0.0)
 
     # Try to trim beyond boundaries
@@ -130,3 +130,32 @@ def test_waveform_trim_preserves_sample_rate() -> None:
     trimmed = waveform.trim(10e-6, 40e-6)
 
     assert trimmed.sample_rate == 2e6
+
+
+def test_mock_oscilloscope_get_waveforms() -> None:
+    """Verify mock returns valid multi-channel waveform data."""
+    mock = MockOscilloscope()
+
+    waveforms = mock.get_waveforms([1, 2, 3])
+
+    assert len(waveforms) == 3
+    assert 1 in waveforms
+    assert 2 in waveforms
+    assert 3 in waveforms
+    for waveform in waveforms.values():
+        assert isinstance(waveform, WaveformData)
+        assert len(waveform.voltages) > 0
+
+
+def test_mock_oscilloscope_get_waveforms_with_timing_offsets() -> None:
+    """Verify mock waveforms have timing offsets for three-point testing."""
+    mock = MockOscilloscope()
+
+    waveforms = mock.get_waveforms([1, 2, 3])
+
+    # Each channel should have pulses at different positions
+    # Channel 1: pulse at 20-80, Channel 2: 25-85, Channel 3: 30-90
+    # Check that mid-pulse values differ
+    assert waveforms[1].voltages[22] == 3.3  # In pulse
+    assert waveforms[2].voltages[22] == 0.0  # Before pulse
+    assert waveforms[3].voltages[22] == 0.0  # Before pulse

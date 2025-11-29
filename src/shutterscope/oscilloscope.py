@@ -101,6 +101,19 @@ class OscilloscopeProtocol(Protocol):
         """
         ...
 
+    def get_waveforms(self, channels: list[int]) -> dict[int, WaveformData]:
+        """Retrieve waveform data from multiple channels.
+
+        All channels are captured with synchronized timing from the same trigger.
+
+        Args:
+            channels: List of channel numbers (1-4)
+
+        Returns:
+            Dictionary mapping channel number to WaveformData
+        """
+        ...
+
 
 class RigolDS1000Z:
     """Rigol DS1000Z oscilloscope implementation using SCPI over VISA."""
@@ -151,7 +164,10 @@ class RigolDS1000Z:
     MEMORY_DEPTHS = [1000, 10000, 100000, 1000000, 6000000, 12000000]
 
     def configure_timebase(
-        self, max_duration: float, sample_interval: float = 1e-6
+        self,
+        max_duration: float,
+        sample_interval: float = 1e-6,
+        channels: list[int] | None = None,
     ) -> None:
         """Configure timebase for pulse capture.
 
@@ -162,9 +178,13 @@ class RigolDS1000Z:
         Args:
             max_duration: Maximum expected pulse duration in seconds
             sample_interval: Desired time between samples in seconds (default 1µs)
+            channels: List of channels to configure (default: [1])
         """
         if self._instrument is None:
             raise RuntimeError("Not connected to oscilloscope")
+
+        if channels is None:
+            channels = [1]
 
         # Stop acquisition before changing settings
         self._instrument.write(":STOP")
@@ -204,15 +224,15 @@ class RigolDS1000Z:
         trigger_offset = -time_per_div * 5  # 5 divisions to the right
         self._instrument.write(f":TIMebase:MAIN:OFFSet {trigger_offset}")
 
-        # Configure vertical scale for 0-2.5V signal with 1 div margin top/bottom
+        # Configure vertical scale for each channel
+        # 0-2.5V signal with 1 div margin top/bottom
         # DS1000Z has 8 vertical divisions. With 0.5V/div, total range = 4V
         # Negative offset moves 0V down on screen
         # To put 0V at 1 div from bottom (3 divs below center): offset = -1.5V
-        self._instrument.write(":CHAN1:SCALe 0.5")  # 0.5V per division
-        self._instrument.write(
-            ":CHAN1:OFFSet -1.5"
-        )  # Shift 0V down to 1 div from bottom
-        self._instrument.write(":CHAN1:DISPlay ON")  # Ensure channel is displayed
+        for channel in channels:
+            self._instrument.write(f":CHAN{channel}:SCALe 0.5")
+            self._instrument.write(f":CHAN{channel}:OFFSet -1.5")
+            self._instrument.write(f":CHAN{channel}:DISPlay ON")
 
     def setup_edge_trigger(
         self, channel: int, level: float, slope: str = "NEG"
@@ -285,18 +305,21 @@ class RigolDS1000Z:
         self._instrument.write(":WAVeform:STARt 1")
         self._instrument.write(f":WAVeform:STOP {min(total_points, 250000)}")
 
-        # Get preamble for voltage conversion
-        # Format: format,type,points,count,xincrement,xorigin,xreference,
-        #         yincrement,yorigin,yreference
-        preamble_raw = self._instrument.query(":WAVeform:PREamble?").strip()
-        preamble = preamble_raw.split(",")
-        y_increment = float(preamble[7])
-        y_origin = float(preamble[8])
-        y_reference = float(preamble[9])
+        # Calculate y_increment from channel scale instead of trusting the preamble
+        # The preamble values can be wrong in RAW mode (firmware bug)
+        # DS1000Z has 8-bit ADC (256 levels) and 8 vertical divisions
+        # y_increment = (scale_per_div * 8_divisions) / 256_levels = scale / 32
+        chan_scale = float(self._instrument.query(f":CHAN{channel}:SCALe?").strip())
+        y_increment = chan_scale / 32.0
 
-        # Get channel offset - needed to correct voltage readings
-        # The preamble values don't account for the display offset properly
+        # Get channel offset for voltage calculation
         chan_offset = float(self._instrument.query(f":CHAN{channel}:OFFSet?").strip())
+
+        # For RAW mode byte->voltage conversion:
+        # - Raw bytes are unsigned 8-bit (0-255)
+        # - Center of ADC range is 128, representing the channel's offset voltage
+        # - voltage = (byte - 128) * y_increment + chan_offset
+        y_reference = 128.0
 
         # Get actual sample rate (preamble x_increment is wrong in RAW mode)
         sample_rate = float(self._instrument.query(":ACQuire:SRATe?").strip())
@@ -332,13 +355,31 @@ class RigolDS1000Z:
             raw_bytes.extend(chunk)
 
         # Convert bytes to voltages
-        # Formula: voltage = (byte - yorigin - yreference) * yincrement - chan_offset
-        # The channel offset must be subtracted as the preamble includes it inverted
+        # Raw byte 128 = center of display = chan_offset voltage
+        # To get actual probe voltage: voltage = (byte - 128) * y_increment - chan_offset
+        # (subtract offset because positive offset moves trace down, meaning higher voltage)
         voltages = [
-            (byte_val - y_origin - y_reference) * y_increment - chan_offset
+            (byte_val - y_reference) * y_increment - chan_offset
             for byte_val in raw_bytes
         ]
 
         return WaveformData(
             voltages=voltages, sample_rate=sample_rate, start_time=x_origin
         )
+
+    def get_waveforms(self, channels: list[int]) -> dict[int, WaveformData]:
+        """Retrieve waveform data from multiple channels.
+
+        All channels are captured with synchronized timing from the same trigger.
+        Downloads each channel sequentially after the trigger completes.
+
+        Args:
+            channels: List of channel numbers (1-4)
+
+        Returns:
+            Dictionary mapping channel number to WaveformData
+        """
+        waveforms = {}
+        for channel in channels:
+            waveforms[channel] = self.get_waveform(channel)
+        return waveforms

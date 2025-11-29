@@ -136,3 +136,131 @@ def _interpolate_crossing(
         return t1
     fraction = (threshold - v1) / (v2 - v1)
     return t1 + fraction * dt
+
+
+# Sensor spacing for 35mm film (mm)
+HORIZONTAL_SENSOR_SPACING_MM = 36.0  # Frame width
+VERTICAL_SENSOR_SPACING_MM = 24.0  # Frame height
+
+
+@dataclass
+class ThreePointMetrics:
+    """Metrics from three-point shutter measurement.
+
+    Contains pulse measurements from first, center, and last sensors,
+    plus derived timing relationships.
+    """
+
+    first: PulseMetrics
+    center: PulseMetrics
+    last: PulseMetrics
+    orientation: str  # "horizontal" or "vertical"
+
+    # Derived timing
+    first_to_center_delay_s: float
+    center_to_last_delay_s: float
+    shutter_travel_time_s: float
+
+    @property
+    def sensor_spacing_mm(self) -> float:
+        """Get sensor spacing based on orientation."""
+        if self.orientation == "vertical":
+            return VERTICAL_SENSOR_SPACING_MM
+        return HORIZONTAL_SENSOR_SPACING_MM
+
+    @property
+    def first_to_center_delay_ms(self) -> float:
+        """First-to-center delay in milliseconds."""
+        return self.first_to_center_delay_s * 1000
+
+    @property
+    def center_to_last_delay_ms(self) -> float:
+        """Center-to-last delay in milliseconds."""
+        return self.center_to_last_delay_s * 1000
+
+    @property
+    def shutter_travel_time_ms(self) -> float:
+        """Total shutter travel time in milliseconds."""
+        return self.shutter_travel_time_s * 1000
+
+    @property
+    def shutter_travel_time_us(self) -> float:
+        """Total shutter travel time in microseconds."""
+        return self.shutter_travel_time_s * 1_000_000
+
+    @property
+    def shutter_velocity_mm_per_s(self) -> float:
+        """Calculate shutter curtain velocity in mm/s."""
+        if self.shutter_travel_time_s <= 0:
+            return 0.0
+        return self.sensor_spacing_mm / self.shutter_travel_time_s
+
+    @property
+    def shutter_velocity_m_per_s(self) -> float:
+        """Calculate shutter curtain velocity in m/s."""
+        return self.shutter_velocity_mm_per_s / 1000
+
+    @property
+    def timing_uniformity(self) -> float:
+        """Uniformity index 0-100. 100 = all three pulse widths identical."""
+        widths = [
+            self.first.pulse_width_s,
+            self.center.pulse_width_s,
+            self.last.pulse_width_s,
+        ]
+        mean = sum(widths) / 3
+        max_deviation = max(abs(w - mean) for w in widths)
+        if mean == 0:
+            return 0.0
+        return max(0.0, 100.0 * (1 - max_deviation / mean))
+
+
+def measure_three_point(
+    waveforms: dict[int, WaveformData],
+    orientation: str = "horizontal",
+    first_channel: int = 1,
+    center_channel: int = 2,
+    last_channel: int = 3,
+) -> ThreePointMetrics:
+    """Measure three-point shutter timing.
+
+    Analyzes waveforms from three sensors to measure shutter travel
+    characteristics across the film plane.
+
+    Args:
+        waveforms: Dictionary of channel -> WaveformData
+        orientation: "horizontal" or "vertical" shutter travel
+        first_channel: Channel number for first sensor (hit first by shutter)
+        center_channel: Channel number for center sensor
+        last_channel: Channel number for last sensor (hit last by shutter)
+
+    Returns:
+        ThreePointMetrics with timing data from all three points
+
+    Raises:
+        PulseMeasurementError: If any channel fails pulse detection
+    """
+    first_metrics = measure_pulse_width(waveforms[first_channel])
+    center_metrics = measure_pulse_width(waveforms[center_channel])
+    last_metrics = measure_pulse_width(waveforms[last_channel])
+
+    # Calculate timing delays between sensors (rising edge to rising edge)
+    first_to_center_delay = (
+        center_metrics.rising_edge_time - first_metrics.rising_edge_time
+    )
+    center_to_last_delay = (
+        last_metrics.rising_edge_time - center_metrics.rising_edge_time
+    )
+
+    # Total travel time: first sensor rise to last sensor rise
+    shutter_travel_time = last_metrics.rising_edge_time - first_metrics.rising_edge_time
+
+    return ThreePointMetrics(
+        first=first_metrics,
+        center=center_metrics,
+        last=last_metrics,
+        orientation=orientation,
+        first_to_center_delay_s=first_to_center_delay,
+        center_to_last_delay_s=center_to_last_delay,
+        shutter_travel_time_s=shutter_travel_time,
+    )
