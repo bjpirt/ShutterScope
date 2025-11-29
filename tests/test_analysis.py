@@ -3,8 +3,6 @@
 import pytest
 
 from shutterscope.analysis import (
-    HORIZONTAL_SENSOR_SPACING_MM,
-    VERTICAL_SENSOR_SPACING_MM,
     PulseMeasurementError,
     PulseMetrics,
     measure_pulse_width,
@@ -149,12 +147,6 @@ def test_pulse_metrics_shutter_speed_fraction_slow() -> None:
 # Three-point measurement tests
 
 
-def test_sensor_spacing_constants() -> None:
-    """Verify sensor spacing constants are correct for 35mm film."""
-    assert HORIZONTAL_SENSOR_SPACING_MM == 36.0
-    assert VERTICAL_SENSOR_SPACING_MM == 24.0
-
-
 def test_measure_three_point_basic() -> None:
     """Test basic three-point measurement with offset pulses."""
     # Create three waveforms with staggered pulse start times
@@ -215,7 +207,6 @@ def test_measure_three_point_horizontal_orientation() -> None:
     metrics = measure_three_point(waveforms, orientation="horizontal")
 
     assert metrics.orientation == "horizontal"
-    assert metrics.sensor_spacing_mm == 36.0
 
 
 def test_measure_three_point_vertical_orientation() -> None:
@@ -241,63 +232,6 @@ def test_measure_three_point_vertical_orientation() -> None:
     metrics = measure_three_point(waveforms, orientation="vertical")
 
     assert metrics.orientation == "vertical"
-    assert metrics.sensor_spacing_mm == 24.0
-
-
-def test_three_point_metrics_velocity_horizontal() -> None:
-    """Test shutter velocity calculation for horizontal travel."""
-    # 36mm in 20µs = 1800 m/s
-    waveforms = {
-        1: WaveformData(
-            voltages=[0.0] * 10 + [3.3] * 60 + [0.0] * 30,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-        2: WaveformData(
-            voltages=[0.0] * 20 + [3.3] * 60 + [0.0] * 20,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-        3: WaveformData(
-            voltages=[0.0] * 30 + [3.3] * 60 + [0.0] * 10,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-    }
-
-    metrics = measure_three_point(waveforms, orientation="horizontal")
-
-    # 36mm / 20µs = 1,800,000 mm/s = 1800 m/s
-    assert metrics.shutter_velocity_mm_per_s == pytest.approx(1_800_000, rel=0.01)
-    assert metrics.shutter_velocity_m_per_s == pytest.approx(1800, rel=0.01)
-
-
-def test_three_point_metrics_velocity_vertical() -> None:
-    """Test shutter velocity calculation for vertical travel."""
-    # 24mm in 20µs = 1200 m/s
-    waveforms = {
-        1: WaveformData(
-            voltages=[0.0] * 10 + [3.3] * 60 + [0.0] * 30,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-        2: WaveformData(
-            voltages=[0.0] * 20 + [3.3] * 60 + [0.0] * 20,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-        3: WaveformData(
-            voltages=[0.0] * 30 + [3.3] * 60 + [0.0] * 10,
-            sample_rate=1e6,
-            start_time=0.0,
-        ),
-    }
-
-    metrics = measure_three_point(waveforms, orientation="vertical")
-
-    # 24mm / 20µs = 1,200,000 mm/s = 1200 m/s
-    assert metrics.shutter_velocity_mm_per_s == pytest.approx(1_200_000, rel=0.01)
-    assert metrics.shutter_velocity_m_per_s == pytest.approx(1200, rel=0.01)
 
 
 def test_three_point_metrics_timing_uniformity_perfect() -> None:
@@ -380,7 +314,6 @@ def test_three_point_metrics_delay_properties() -> None:
     assert metrics.first_to_center_delay_ms == pytest.approx(0.01, rel=0.01)
     assert metrics.center_to_last_delay_ms == pytest.approx(0.01, rel=0.01)
     assert metrics.shutter_travel_time_ms == pytest.approx(0.02, rel=0.01)
-    assert metrics.shutter_travel_time_us == pytest.approx(20, rel=0.01)
 
 
 def test_measure_three_point_custom_channels() -> None:

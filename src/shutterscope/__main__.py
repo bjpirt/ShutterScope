@@ -87,10 +87,9 @@ def _capture_three_point(
             f"({metrics.last.shutter_speed_fraction})"
         )
         print()
-        print(f"  Travel Time:      {metrics.shutter_travel_time_us:.1f} µs")
-        print(f"  First→Center:     {metrics.first_to_center_delay_s * 1e6:.1f} µs")
-        print(f"  Center→Last:      {metrics.center_to_last_delay_s * 1e6:.1f} µs")
-        print(f"  Curtain Velocity: {metrics.shutter_velocity_m_per_s:.2f} m/s")
+        print(f"  Travel Time:      {metrics.shutter_travel_time_ms:.2f} ms")
+        print(f"  First→Center:     {metrics.first_to_center_delay_ms:.2f} ms")
+        print(f"  Center→Last:      {metrics.center_to_last_delay_ms:.2f} ms")
         print(f"  Uniformity:       {metrics.timing_uniformity:.1f}%")
 
         # Trim all waveforms to pulse region with margin

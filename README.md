@@ -45,15 +45,14 @@ Waiting for trigger...
 Triggered! Downloading waveforms...
 
 Three-Point Shutter Measurement (horizontal):
-  First:  8.09 ms (1/125)
-  Center: 8.09 ms (1/125)
-  Last:   8.10 ms (1/125)
+  First:  7.99 ms (1/125)
+  Center: 8.00 ms (1/125)
+  Last:   8.02 ms (1/125)
 
-  Travel Time:      9073.0 µs
-  First→Center:     4561.0 µs
-  Center→Last:      4512.0 µs
-  Curtain Velocity: 3.97 m/s
-  Uniformity:       99.9%
+  Travel Time:      9.98 ms
+  First→Center:     5.00 ms
+  Center→Last:      4.98 ms
+  Uniformity:       99.7%
 
 Saved to captures/capture_2025-11-29T17:57:01.json
 Saved plot to captures/capture_2025-11-29T17:57:01.png

@@ -138,11 +138,6 @@ def _interpolate_crossing(
     return t1 + fraction * dt
 
 
-# Sensor spacing for 35mm film (mm)
-HORIZONTAL_SENSOR_SPACING_MM = 36.0  # Frame width
-VERTICAL_SENSOR_SPACING_MM = 24.0  # Frame height
-
-
 @dataclass
 class ThreePointMetrics:
     """Metrics from three-point shutter measurement.
@@ -162,13 +157,6 @@ class ThreePointMetrics:
     shutter_travel_time_s: float
 
     @property
-    def sensor_spacing_mm(self) -> float:
-        """Get sensor spacing based on orientation."""
-        if self.orientation == "vertical":
-            return VERTICAL_SENSOR_SPACING_MM
-        return HORIZONTAL_SENSOR_SPACING_MM
-
-    @property
     def first_to_center_delay_ms(self) -> float:
         """First-to-center delay in milliseconds."""
         return self.first_to_center_delay_s * 1000
@@ -182,23 +170,6 @@ class ThreePointMetrics:
     def shutter_travel_time_ms(self) -> float:
         """Total shutter travel time in milliseconds."""
         return self.shutter_travel_time_s * 1000
-
-    @property
-    def shutter_travel_time_us(self) -> float:
-        """Total shutter travel time in microseconds."""
-        return self.shutter_travel_time_s * 1_000_000
-
-    @property
-    def shutter_velocity_mm_per_s(self) -> float:
-        """Calculate shutter curtain velocity in mm/s."""
-        if self.shutter_travel_time_s <= 0:
-            return 0.0
-        return self.sensor_spacing_mm / self.shutter_travel_time_s
-
-    @property
-    def shutter_velocity_m_per_s(self) -> float:
-        """Calculate shutter curtain velocity in m/s."""
-        return self.shutter_velocity_mm_per_s / 1000
 
     @property
     def timing_uniformity(self) -> float:

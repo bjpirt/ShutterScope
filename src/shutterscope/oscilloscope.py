@@ -356,8 +356,8 @@ class RigolDS1000Z:
 
         # Convert bytes to voltages
         # Raw byte 128 = center of display = chan_offset voltage
-        # To get actual probe voltage: voltage = (byte - 128) * y_increment - chan_offset
-        # (subtract offset because positive offset moves trace down, meaning higher voltage)
+        # voltage = (byte - 128) * y_increment - chan_offset
+        # (subtract offset because positive offset moves trace down)
         voltages = [
             (byte_val - y_reference) * y_increment - chan_offset
             for byte_val in raw_bytes

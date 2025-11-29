@@ -193,7 +193,6 @@ def save_three_point_json(
             "first_to_center_delay_s": metrics.first_to_center_delay_s,
             "center_to_last_delay_s": metrics.center_to_last_delay_s,
             "shutter_travel_time_s": metrics.shutter_travel_time_s,
-            "shutter_velocity_m_per_s": metrics.shutter_velocity_m_per_s,
             "timing_uniformity": metrics.timing_uniformity,
         }
 
