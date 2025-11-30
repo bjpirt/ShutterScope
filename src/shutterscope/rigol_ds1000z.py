@@ -40,14 +40,19 @@ class RigolDS1000Z:
                 pass
         raise ConnectionError("No Rigol DS1000Z oscilloscope found")
 
-    def __init__(self, resource: str) -> None:
+    def __init__(
+        self,
+        resource: str,
+        instrument: MessageBasedResource | None = None,
+    ) -> None:
         """Initialize with a VISA resource string.
 
         Args:
             resource: VISA resource string (e.g., "USB0::...")
+            instrument: Optional pre-connected instrument (for testing)
         """
         self._resource = resource
-        self._instrument: MessageBasedResource | None = None
+        self._instrument = instrument
 
     def connect(self) -> None:
         """Connect to the oscilloscope."""
